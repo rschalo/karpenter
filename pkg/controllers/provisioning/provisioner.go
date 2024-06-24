@@ -207,10 +207,6 @@ func (p *Provisioner) NewScheduler(ctx context.Context, pods []*v1.Pod, stateNod
 		return nil, fmt.Errorf("listing node pools, %w", err)
 	}
 	nodePoolList.Items = lo.Filter(nodePoolList.Items, func(n v1beta1.NodePool, _ int) bool {
-		if err := n.RuntimeValidate(); err != nil {
-			log.FromContext(ctx).WithValues("NodePool", klog.KRef("", n.Name)).Error(err, "nodepool failed validation")
-			return false
-		}
 		return n.DeletionTimestamp.IsZero()
 	})
 	if len(nodePoolList.Items) == 0 {
@@ -492,13 +488,6 @@ func validateAffinity(p *v1.Pod) (errs error) {
 func validateNodeSelectorTerm(term v1.NodeSelectorTerm) (errs error) {
 	if term.MatchFields != nil {
 		errs = multierr.Append(errs, fmt.Errorf("node selector term with matchFields is not supported"))
-	}
-	if term.MatchExpressions != nil {
-		for _, requirement := range term.MatchExpressions {
-			errs = multierr.Append(errs, v1beta1.ValidateRequirement(v1beta1.NodeSelectorRequirementWithMinValues{
-				NodeSelectorRequirement: requirement,
-			}))
-		}
 	}
 	return errs
 }

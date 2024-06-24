@@ -45,10 +45,8 @@ const (
 var NopLogger = zapr.NewLogger(zap.NewNop())
 
 func DefaultZapConfig(ctx context.Context, component string) zap.Config {
-	logLevel := lo.Ternary(component != "webhook", zap.NewAtomicLevelAt(zap.InfoLevel), zap.NewAtomicLevelAt(zap.ErrorLevel))
-	if l := options.FromContext(ctx).LogLevel; l != "" && component != "webhook" {
-		// Webhook log level can only be configured directly through the zap-config
-		// Webhooks are deprecated, so support for changing their log level is also deprecated
+	logLevel := zap.NewAtomicLevelAt(zap.InfoLevel)
+	if l := options.FromContext(ctx).LogLevel; l != "" {
 		logLevel = lo.Must(zap.ParseAtomicLevel(l))
 	}
 	return zap.Config{

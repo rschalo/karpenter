@@ -45,11 +45,7 @@ func TestOptions(t *testing.T) {
 
 var _ = Describe("Options", func() {
 	var environmentVariables = []string{
-		"KARPENTER_SERVICE",
-		"DISABLE_WEBHOOK",
-		"WEBHOOK_PORT",
 		"METRICS_PORT",
-		"WEBHOOK_METRICS_PORT",
 		"HEALTH_PROBE_PORT",
 		"KUBE_CLIENT_QPS",
 		"KUBE_CLIENT_BURST",
@@ -96,11 +92,7 @@ var _ = Describe("Options", func() {
 			err := opts.Parse(fs)
 			Expect(err).To(BeNil())
 			expectOptionsMatch(opts, test.Options(test.OptionsFields{
-				ServiceName:          lo.ToPtr(""),
-				DisableWebhook:       lo.ToPtr(true),
-				WebhookPort:          lo.ToPtr(8443),
 				MetricsPort:          lo.ToPtr(8000),
-				WebhookMetricsPort:   lo.ToPtr(8001),
 				HealthProbePort:      lo.ToPtr(8081),
 				KubeClientQPS:        lo.ToPtr(200),
 				KubeClientBurst:      lo.ToPtr(300),
@@ -119,11 +111,7 @@ var _ = Describe("Options", func() {
 		It("shouldn't overwrite CLI flags with environment variables", func() {
 			err := opts.Parse(
 				fs,
-				"--karpenter-service", "cli",
-				"--disable-webhook",
-				"--webhook-port", "0",
 				"--metrics-port", "0",
-				"--webhook-metrics-port", "0",
 				"--health-probe-port", "0",
 				"--kube-client-qps", "0",
 				"--kube-client-burst", "0",
@@ -137,11 +125,7 @@ var _ = Describe("Options", func() {
 			)
 			Expect(err).To(BeNil())
 			expectOptionsMatch(opts, test.Options(test.OptionsFields{
-				ServiceName:          lo.ToPtr("cli"),
-				DisableWebhook:       lo.ToPtr(true),
-				WebhookPort:          lo.ToPtr(0),
 				MetricsPort:          lo.ToPtr(0),
-				WebhookMetricsPort:   lo.ToPtr(0),
 				HealthProbePort:      lo.ToPtr(0),
 				KubeClientQPS:        lo.ToPtr(0),
 				KubeClientBurst:      lo.ToPtr(0),
@@ -158,11 +142,7 @@ var _ = Describe("Options", func() {
 		})
 
 		It("should use environment variables when CLI flags aren't set", func() {
-			os.Setenv("KARPENTER_SERVICE", "env")
-			os.Setenv("DISABLE_WEBHOOK", "true")
-			os.Setenv("WEBHOOK_PORT", "0")
 			os.Setenv("METRICS_PORT", "0")
-			os.Setenv("WEBHOOK_METRICS_PORT", "0")
 			os.Setenv("HEALTH_PROBE_PORT", "0")
 			os.Setenv("KUBE_CLIENT_QPS", "0")
 			os.Setenv("KUBE_CLIENT_BURST", "0")
@@ -180,11 +160,7 @@ var _ = Describe("Options", func() {
 			err := opts.Parse(fs)
 			Expect(err).To(BeNil())
 			expectOptionsMatch(opts, test.Options(test.OptionsFields{
-				ServiceName:          lo.ToPtr("env"),
-				DisableWebhook:       lo.ToPtr(true),
-				WebhookPort:          lo.ToPtr(0),
 				MetricsPort:          lo.ToPtr(0),
-				WebhookMetricsPort:   lo.ToPtr(0),
 				HealthProbePort:      lo.ToPtr(0),
 				KubeClientQPS:        lo.ToPtr(0),
 				KubeClientBurst:      lo.ToPtr(0),
@@ -201,9 +177,7 @@ var _ = Describe("Options", func() {
 		})
 
 		It("should correctly merge CLI flags and environment variables", func() {
-			os.Setenv("WEBHOOK_PORT", "0")
 			os.Setenv("METRICS_PORT", "0")
-			os.Setenv("WEBHOOK_METRICS_PORT", "0")
 			os.Setenv("HEALTH_PROBE_PORT", "0")
 			os.Setenv("KUBE_CLIENT_QPS", "0")
 			os.Setenv("KUBE_CLIENT_BURST", "0")
@@ -220,16 +194,10 @@ var _ = Describe("Options", func() {
 			opts.AddFlags(fs)
 			err := opts.Parse(
 				fs,
-				"--karpenter-service", "cli",
-				"--disable-webhook",
 			)
 			Expect(err).To(BeNil())
 			expectOptionsMatch(opts, test.Options(test.OptionsFields{
-				ServiceName:          lo.ToPtr("cli"),
-				DisableWebhook:       lo.ToPtr(true),
-				WebhookPort:          lo.ToPtr(0),
 				MetricsPort:          lo.ToPtr(0),
-				WebhookMetricsPort:   lo.ToPtr(0),
 				HealthProbePort:      lo.ToPtr(0),
 				KubeClientQPS:        lo.ToPtr(0),
 				KubeClientBurst:      lo.ToPtr(0),
@@ -244,19 +212,6 @@ var _ = Describe("Options", func() {
 				},
 			}))
 		})
-
-		DescribeTable(
-			"should correctly parse boolean values",
-			func(arg string, expected bool) {
-				err := opts.Parse(fs, arg)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(opts.DisableWebhook).To(Equal(expected))
-			},
-			Entry("explicit true", "--disable-webhook=true", true),
-			Entry("explicit false", "--disable-webhook=false", false),
-			Entry("implicit true", "--disable-webhook", true),
-			Entry("implicit true", "", true),
-		)
 	})
 
 	Context("Validation", func() {
@@ -285,11 +240,7 @@ func expectOptionsMatch(optsA, optsB *options.Options) {
 	}
 	Expect(optsA).ToNot(BeNil())
 	Expect(optsB).ToNot(BeNil())
-	Expect(optsA.ServiceName).To(Equal(optsB.ServiceName))
-	Expect(optsA.DisableWebhook).To(Equal(optsB.DisableWebhook))
-	Expect(optsA.WebhookPort).To(Equal(optsB.WebhookPort))
 	Expect(optsA.MetricsPort).To(Equal(optsB.MetricsPort))
-	Expect(optsA.WebhookMetricsPort).To(Equal(optsB.WebhookMetricsPort))
 	Expect(optsA.HealthProbePort).To(Equal(optsB.HealthProbePort))
 	Expect(optsA.KubeClientQPS).To(Equal(optsB.KubeClientQPS))
 	Expect(optsA.KubeClientBurst).To(Equal(optsB.KubeClientBurst))
