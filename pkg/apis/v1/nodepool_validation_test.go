@@ -34,7 +34,7 @@ import (
 	. "sigs.k8s.io/karpenter/pkg/apis/v1"
 )
 
-var _ = Describe("Webhook/Validation", func() {
+var _ = Describe("Validation", func() {
 	var nodePool *NodePool
 
 	BeforeEach(func() {

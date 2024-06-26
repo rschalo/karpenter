@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"knative.dev/pkg/apis"
 	"knative.dev/pkg/ptr"
 )
 
@@ -68,19 +67,19 @@ func (in *NodeClaim) SupportedVerbs() []admissionregistrationv1.OperationType {
 }
 
 // Validate the NodeClaim
-func (in *NodeClaim) Validate(_ context.Context) (errs *apis.FieldError) {
-	return errs.Also(
-		apis.ValidateObjectMetadata(in).ViaField("metadata"),
-		in.Spec.validate().ViaField("spec"),
-	)
+func (in *NodeClaim) Validate(_ context.Context) error {
+	var errs error
+	errs = multierr.Append(errs, ValidateObjectMetadata(in))
+	errs = multierr.Append(errs, in.Spec.validate())
+	return errs
 }
 
-func (in *NodeClaimSpec) validate() (errs *apis.FieldError) {
-	return errs.Also(
-		in.validateTaints(),
-		in.validateRequirements(),
-		in.Kubelet.validate().ViaField("kubeletConfiguration"),
-	)
+func (in *NodeClaimSpec) validate() error {
+	var errs error
+	errs = multierr.Append(errs, in.validateTaints())
+	errs = multierr.Append(errs, in.validateRequirements())
+	errs = multierr.Append(errs, in.Kubelet.validate())
+	return errs
 }
 
 type taintKeyEffect struct {
@@ -88,54 +87,55 @@ type taintKeyEffect struct {
 	Effect   v1.TaintEffect
 }
 
-func (in *NodeClaimSpec) validateTaints() (errs *apis.FieldError) {
+func (in *NodeClaimSpec) validateTaints() error {
+	var errs error
 	existing := map[taintKeyEffect]struct{}{}
-	errs = errs.Also(in.validateTaintsField(in.Taints, existing, "taints"))
-	errs = errs.Also(in.validateTaintsField(in.StartupTaints, existing, "startupTaints"))
+	errs = multierr.Append(errs, in.validateTaintsField(in.Taints, existing, "taint"))
+	errs = multierr.Append(errs, in.validateTaintsField(in.StartupTaints, existing, "startupTaint"))
 	return errs
 }
 
-func (in *NodeClaimSpec) validateTaintsField(taints []v1.Taint, existing map[taintKeyEffect]struct{}, fieldName string) *apis.FieldError {
-	var errs *apis.FieldError
+func (in *NodeClaimSpec) validateTaintsField(taints []v1.Taint, existing map[taintKeyEffect]struct{}, fieldName string) error {
+	var errs error
 	for i, taint := range taints {
 		// Validate OwnerKey
 		if len(taint.Key) == 0 {
-			errs = errs.Also(apis.ErrInvalidArrayValue(errs, fieldName, i))
+			errs = multierr.Append(errs, fmt.Errorf("missing taint key for %s, taint: %v", fieldName, i))
 		}
 		for _, err := range validation.IsQualifiedName(taint.Key) {
-			errs = errs.Also(apis.ErrInvalidArrayValue(err, fieldName, i))
+			errs = multierr.Append(errs, fmt.Errorf("invalid %s key: %s, err: %s", fieldName, taint.Key, err))
 		}
 		// Validate Value
 		if len(taint.Value) != 0 {
 			for _, err := range validation.IsQualifiedName(taint.Value) {
-				errs = errs.Also(apis.ErrInvalidArrayValue(err, fieldName, i))
+				errs = multierr.Append(errs, fmt.Errorf("invalid %s value: %s, for key: %s, err: %s", fieldName, taint.Value, taint.Key, err))
 			}
 		}
 		// Validate effect
 		switch taint.Effect {
 		case v1.TaintEffectNoSchedule, v1.TaintEffectPreferNoSchedule, v1.TaintEffectNoExecute, "":
 		default:
-			errs = errs.Also(apis.ErrInvalidArrayValue(taint.Effect, fieldName, i))
+			errs = multierr.Append(errs, fmt.Errorf("invalid %s effect: %s, for value: %s, for key: %s", fieldName, taint.Effect, taint.Value, taint.Key))
 		}
 
 		// Check for duplicate OwnerKey/Effect pairs
 		key := taintKeyEffect{OwnerKey: taint.Key, Effect: taint.Effect}
 		if _, ok := existing[key]; ok {
-			errs = errs.Also(apis.ErrGeneric(fmt.Sprintf("duplicate taint Key/Effect pair %s=%s", taint.Key, taint.Effect), apis.CurrentField).
-				ViaFieldIndex("taints", i))
+			errs = multierr.Append(errs, fmt.Errorf("duplicate taint Key/Effect pair %s=%s", taint.Key, taint.Effect))
 		}
 		existing[key] = struct{}{}
 	}
 	return errs
 }
 
-// This function is used by the NodeClaim validation webhook to verify the nodepool requirements.
+// This function is used by the NodeClaim apivalidation webhook to verify the nodepool requirements.
 // When this function is called, the nodepool's requirements do not include the requirements from labels.
 // NodeClaim requirements only support well known labels.
-func (in *NodeClaimSpec) validateRequirements() (errs *apis.FieldError) {
-	for i, requirement := range in.Requirements {
+func (in *NodeClaimSpec) validateRequirements() error {
+	var errs error
+	for _, requirement := range in.Requirements {
 		if err := ValidateRequirement(requirement); err != nil {
-			errs = errs.Also(apis.ErrInvalidArrayValue(err, "requirements", i))
+			errs = multierr.Append(errs, fmt.Errorf("invalid requirement: %v", requirement))
 		}
 	}
 	return errs
@@ -181,85 +181,89 @@ func ValidateRequirement(requirement NodeSelectorRequirementWithMinValues) error
 	return errs
 }
 
-func (in *KubeletConfiguration) validate() (errs *apis.FieldError) {
+func (in *KubeletConfiguration) validate() error {
+	var errs error
 	if in == nil {
-		return
+		return nil
 	}
-	return errs.Also(
-		validateEvictionThresholds(in.EvictionHard, "evictionHard"),
-		validateEvictionThresholds(in.EvictionSoft, "evictionSoft"),
-		validateReservedResources(in.KubeReserved, "kubeReserved"),
-		validateReservedResources(in.SystemReserved, "systemReserved"),
-		in.validateImageGCHighThresholdPercent(),
-		in.validateImageGCLowThresholdPercent(),
-		in.validateEvictionSoftGracePeriod(),
-		in.validateEvictionSoftPairs(),
-	)
+	errs = multierr.Append(errs, validateEvictionThresholds(in.EvictionHard, "evictionHard"))
+	errs = multierr.Append(errs, validateEvictionThresholds(in.EvictionSoft, "evictionSoft"))
+	errs = multierr.Append(errs, validateReservedResources(in.KubeReserved, "kubeReserved"))
+	errs = multierr.Append(errs, validateReservedResources(in.SystemReserved, "systemReserved"))
+	errs = multierr.Append(errs, in.validateImageGCHighThresholdPercent())
+	errs = multierr.Append(errs, in.validateImageGCLowThresholdPercent())
+	errs = multierr.Append(errs, in.validateEvictionSoftGracePeriod())
+	errs = multierr.Append(errs, in.validateEvictionSoftPairs())
+	return errs
 }
 
-func (in *KubeletConfiguration) validateEvictionSoftGracePeriod() (errs *apis.FieldError) {
+func (in *KubeletConfiguration) validateEvictionSoftGracePeriod() error {
+	var errs error
 	for k := range in.EvictionSoftGracePeriod {
 		if !SupportedEvictionSignals.Has(k) {
-			errs = errs.Also(apis.ErrInvalidKeyName(k, "evictionSoftGracePeriod"))
+			errs = multierr.Append(errs, fmt.Errorf("invalid key: %s for evictionSoftGracePeriod", k))
 		}
 	}
 	return errs
 }
 
-func (in *KubeletConfiguration) validateEvictionSoftPairs() (errs *apis.FieldError) {
+func (in *KubeletConfiguration) validateEvictionSoftPairs() error {
+	var errs error
 	evictionSoftKeys := sets.New(lo.Keys(in.EvictionSoft)...)
 	evictionSoftGracePeriodKeys := sets.New(lo.Keys(in.EvictionSoftGracePeriod)...)
 
 	evictionSoftDiff := evictionSoftKeys.Difference(evictionSoftGracePeriodKeys)
 	for k := range evictionSoftDiff {
-		errs = errs.Also(apis.ErrInvalidKeyName(k, "evictionSoft", "OwnerKey does not have a matching evictionSoftGracePeriod"))
+		errs = multierr.Append(errs, fmt.Errorf("OwnerKey: %s does not have a matching evictionSoftGracePeriod", k))
 	}
 	evictionSoftGracePeriodDiff := evictionSoftGracePeriodKeys.Difference(evictionSoftKeys)
 	for k := range evictionSoftGracePeriodDiff {
-		errs = errs.Also(apis.ErrInvalidKeyName(k, "evictionSoftGracePeriod", "OwnerKey does not have a matching evictionSoft threshold value"))
+		errs = multierr.Append(errs, fmt.Errorf("OwnerKey: %s does not have a matching evictionSoft threshold value", k))
 	}
 	return errs
 }
 
-func validateReservedResources(m map[string]string, fieldName string) (errs *apis.FieldError) {
+func validateReservedResources(m map[string]string, fieldName string) error {
+	var errs error
 	for k, v := range m {
 		if !SupportedReservedResources.Has(k) {
-			errs = errs.Also(apis.ErrInvalidKeyName(k, fieldName))
+			errs = multierr.Append(errs, fmt.Errorf("invalid key: %s, for: %s", k, fieldName))
 		}
 		quantity, err := resource.ParseQuantity(v)
 		if err != nil {
-			errs = errs.Also(apis.ErrInvalidValue(v, fmt.Sprintf(`%s["%s"]`, fieldName, k), "Value must be a quantity value"))
+			errs = multierr.Append(errs, fmt.Errorf(`%s["%s"]=%s, value must be a quantity value`, fieldName, k, v))
 		}
 		if quantity.Value() < 0 {
-			errs = errs.Also(apis.ErrInvalidValue(v, fmt.Sprintf(`%s["%s"]`, fieldName, k), "Value cannot be a negative resource quantity"))
+			errs = multierr.Append(errs, fmt.Errorf(`%s["%s"]=%s, value cannot be a negative resource quantity`, fieldName, k, v))
 		}
 	}
 	return errs
 }
 
-func validateEvictionThresholds(m map[string]string, fieldName string) (errs *apis.FieldError) {
+func validateEvictionThresholds(m map[string]string, fieldName string) error {
+	var errs error
 	if m == nil {
-		return
+		return nil
 	}
 	for k, v := range m {
 		if !SupportedEvictionSignals.Has(k) {
-			errs = errs.Also(apis.ErrInvalidKeyName(k, fieldName))
+			errs = multierr.Append(errs, fmt.Errorf("invalid key: %s, for: %s", k, fieldName))
 		}
 		if strings.HasSuffix(v, "%") {
 			p, err := strconv.ParseFloat(strings.Trim(v, "%"), 64)
 			if err != nil {
-				errs = errs.Also(apis.ErrInvalidValue(v, fmt.Sprintf(`%s["%s"]`, fieldName, k), fmt.Sprintf("Value could not be parsed as a percentage value, %v", err.Error())))
+				errs = multierr.Append(errs, fmt.Errorf(`%s["%s"]=%s, value could not be parsed as a percentage value, %s`, fieldName, k, v, err.Error()))
 			}
 			if p < 0 {
-				errs = errs.Also(apis.ErrInvalidValue(v, fmt.Sprintf(`%s["%s"]`, fieldName, k), "Percentage values cannot be negative"))
+				errs = multierr.Append(errs, fmt.Errorf(`%s["%s"]=%s, percentage values cannot be negative`, fieldName, k, v))
 			}
 			if p > 100 {
-				errs = errs.Also(apis.ErrInvalidValue(v, fmt.Sprintf(`%s["%s"]`, fieldName, k), "Percentage values cannot be greater than 100"))
+				errs = multierr.Append(errs, fmt.Errorf(`%s["%s"]=%s, percentage values cannot be greater than 100`, fieldName, k, v))
 			}
 		} else {
 			_, err := resource.ParseQuantity(v)
 			if err != nil {
-				errs = errs.Also(apis.ErrInvalidValue(v, fmt.Sprintf("%s[%s]", fieldName, k), fmt.Sprintf("Value could not be parsed as a resource quantity, %v", err.Error())))
+				errs = multierr.Append(errs, fmt.Errorf(`%s[%s]=%s, invalid value, err: %s`, fieldName, k, v, err.Error()))
 			}
 		}
 	}
@@ -267,18 +271,20 @@ func validateEvictionThresholds(m map[string]string, fieldName string) (errs *ap
 }
 
 // Validate validateImageGCHighThresholdPercent
-func (in *KubeletConfiguration) validateImageGCHighThresholdPercent() (errs *apis.FieldError) {
+func (in *KubeletConfiguration) validateImageGCHighThresholdPercent() error {
+	var errs error
 	if in.ImageGCHighThresholdPercent != nil && ptr.Int32Value(in.ImageGCHighThresholdPercent) < ptr.Int32Value(in.ImageGCLowThresholdPercent) {
-		return errs.Also(apis.ErrInvalidValue("must be greater than imageGCLowThresholdPercent", "imageGCHighThresholdPercent"))
+		return multierr.Append(errs, fmt.Errorf("imageGCHighThresholdPercent must be greater than imageGCLowThresholdPercent"))
 	}
 
 	return errs
 }
 
 // Validate imageGCLowThresholdPercent
-func (in *KubeletConfiguration) validateImageGCLowThresholdPercent() (errs *apis.FieldError) {
+func (in *KubeletConfiguration) validateImageGCLowThresholdPercent() error {
+	var errs error
 	if in.ImageGCHighThresholdPercent != nil && ptr.Int32Value(in.ImageGCLowThresholdPercent) > ptr.Int32Value(in.ImageGCHighThresholdPercent) {
-		return errs.Also(apis.ErrInvalidValue("must be less than imageGCHighThresholdPercent", "imageGCLowThresholdPercent"))
+		return multierr.Append(errs, fmt.Errorf("imageGCLowThresholdPercent must be less than imageGCHighThresholdPercent"))
 	}
 
 	return errs
