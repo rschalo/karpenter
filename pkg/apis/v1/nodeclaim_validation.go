@@ -17,7 +17,6 @@ limitations under the License.
 package v1
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -64,14 +63,6 @@ func (in *NodeClaim) SupportedVerbs() []admissionregistrationv1.OperationType {
 		admissionregistrationv1.Create,
 		admissionregistrationv1.Update,
 	}
-}
-
-// Validate the NodeClaim
-func (in *NodeClaim) Validate(_ context.Context) error {
-	var errs error
-	errs = multierr.Append(errs, ValidateObjectMetadata(in))
-	errs = multierr.Append(errs, in.Spec.validate())
-	return errs
 }
 
 func (in *NodeClaimSpec) validate() error {

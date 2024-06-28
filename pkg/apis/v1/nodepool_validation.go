@@ -17,7 +17,6 @@ limitations under the License.
 package v1
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/robfig/cron/v3"
@@ -34,16 +33,10 @@ func (in *NodePool) SupportedVerbs() []admissionregistrationv1.OperationType {
 	}
 }
 
-func (in *NodePool) Validate(_ context.Context) error {
-	var errs error
-	errs = multierr.Append(errs, ValidateObjectMetadata(in))
-	errs = multierr.Append(errs, in.Spec.validate())
-	return errs
-}
-
 // RuntimeValidate will be used to validate any part of the CRD that can not be validated at CRD creation
 func (in *NodePool) RuntimeValidate() error {
 	var errs error
+	errs = multierr.Append(errs, in.Spec.validate())
 	errs = multierr.Append(errs, in.Spec.Template.validateLabels())
 	errs = multierr.Append(errs, in.Spec.Template.Spec.validateTaints())
 	errs = multierr.Append(errs, in.Spec.Template.Spec.validateRequirements())
