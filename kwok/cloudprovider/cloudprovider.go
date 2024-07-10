@@ -177,7 +177,7 @@ func (c CloudProvider) toNode(nodeClaim *v1.NodeClaim) (*corev1.Node, error) {
 		},
 		Spec: corev1.NodeSpec{
 			ProviderID: kwokProviderPrefix + newName,
-			Taints:     []v1.Taint{v1beta1.UnregisteredNoExecuteTaint},
+			Taints:     []corev1.Taint{v1.UnregisteredNoExecuteTaint},
 		},
 		Status: corev1.NodeStatus{
 			Capacity:    instanceType.Capacity,

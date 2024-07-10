@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	v1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 	"sigs.k8s.io/karpenter/pkg/test/v1alpha1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +32,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"sigs.k8s.io/karpenter/pkg/apis"
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"sigs.k8s.io/karpenter/pkg/cloudprovider/fake"
 	"sigs.k8s.io/karpenter/pkg/controllers/nodepool/readiness"
 	"sigs.k8s.io/karpenter/pkg/test"
@@ -44,7 +44,7 @@ var (
 	ctx           context.Context
 	env           *test.Environment
 	cloudProvider *fake.CloudProvider
-	nodePool      *v1beta1.NodePool
+	nodePool      *v1.NodePool
 	nodeClass     *v1alpha1.TestNodeClass
 )
 
