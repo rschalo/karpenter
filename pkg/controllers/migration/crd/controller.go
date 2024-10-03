@@ -102,11 +102,11 @@ func (c *Controller) Reconcile(ctx context.Context, crd *apiextensionsv1.CustomR
 	stored := crd.DeepCopy()
 	crd.Status.StoredVersions = []string{"v1"}
 	if !equality.Semantic.DeepEqual(stored, crd) {
-		if err := c.kubeClient.Status().Patch(ctx, crd, client.StrategicMergeFrom(stored, client.MergeFromWithOptimisticLock{})); client.IgnoreNotFound(err) != nil {
+		if err := c.kubeClient.Status().Patch(ctx, crd, client.StrategicMergeFrom(stored, client.MergeFromWithOptimisticLock{})); err != nil {
 			if errors.IsConflict(err) {
 				return reconcile.Result{Requeue: true}, nil
 			}
-			return reconcile.Result{}, fmt.Errorf("patching crd status version %s, %w", crd.Name, err)
+			return reconcile.Result{}, client.IgnoreNotFound(fmt.Errorf("patching crd status version %s, %w", crd.Name, err))
 		}
 	}
 	return reconcile.Result{}, nil
