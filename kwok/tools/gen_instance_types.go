@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	KwokZones = []string{"test-zone-a", "test-zone-b", "test-zone-c", "test-zone-d"}
+	KwokZones = []string{"us-west-2a", "us-west-2b", "us-west-2c"}
 )
 
 func makeGenericInstanceTypeName(cpu, memFactor int, arch string, os corev1.OSName) string {
@@ -45,7 +45,7 @@ func makeGenericInstanceTypeName(cpu, memFactor int, arch string, os corev1.OSNa
 	case 8:
 		family = "m" // memory
 	default:
-		family = "e" // exotic
+		family = "r" // exotic
 	}
 	return fmt.Sprintf("%s-%s-%s-%s", family, size, arch, os)
 }
