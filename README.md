@@ -66,3 +66,122 @@ Participation in the Kubernetes community is governed by the [Kubernetes Code of
 - 11/19/2021 [Karpenter @ Container Day](https://youtu.be/qxWJRUF6JJc)
 - 05/14/2021 [Groupless Autoscaling with Karpenter @ Kubecon](https://www.youtube.com/watch?v=43g8uPohTgc)
 - 05/04/2021 [Karpenter @ Container Day](https://youtu.be/MZ-4HzOC_ac?t=7137)
+
+# Karpenter Deployment Generator
+
+This tool helps create and manage deployments and NodePools for testing Karpenter's node provisioning capabilities. It can create deployments with pod anti-affinity and topology spread constraints, as well as NodePools with exclusive requirements.
+
+## Features
+
+- Create deployments with pod anti-affinity to force pods onto different nodes
+- Create deployments with topology spread constraints to distribute pods across availability zones
+- Create NodePools with a diverse sampling of instance types and architectures
+- Create deployments that target specific NodePools
+- Delete deployments and NodePools
+- Halve the number of replicas for existing deployments
+
+## Prerequisites
+
+- Kubernetes cluster with Karpenter installed
+- `kubectl` configured to access your cluster
+- Go 1.19+
+
+## Usage
+
+### Creating Deployments with Anti-Affinity
+
+```bash
+go run create_deployments.go --deployments=3 --replicas=5 --namespace=test
+```
+
+This creates 3 deployments in the "test" namespace, each with 5 replicas. The pods will have:
+- Anti-affinity rules to prevent pods from the same deployment from being scheduled on the same node
+- Topology spread constraints to ensure pods are distributed across at least 3 availability zones
+
+### Creating NodePools with Diverse Instance Types and Architectures
+
+```bash
+go run create_deployments.go --create-nodepools --deployments=10 --replicas=3 --namespace=test --labels="disk-type=ssd,env=test"
+```
+
+This creates:
+- Up to 10 NodePools with a diverse sampling of instance types and architectures
+- The tool automatically selects from a variety of instance types (m5.large, c5.large, r5.large, m6g.large, etc.)
+- Appropriate architecture is selected for each instance type (amd64 for x86 instances, arm64 for Graviton instances)
+- Matching deployments that target these NodePools using node selectors
+
+### Deleting Deployments
+
+```bash
+go run create_deployments.go --delete --deployments=3 --namespace=test
+```
+
+This deletes 3 deployments in the "test" namespace.
+
+### Deleting NodePools
+
+```bash
+go run create_deployments.go --delete-nodepools --deployments=10
+```
+
+This deletes 10 NodePools.
+
+### Halving Replicas
+
+```bash
+go run create_deployments.go --halve --namespace=test
+```
+
+This finds all deployments with the default prefix in the "test" namespace and halves their replicas (rounding up).
+
+## Command-Line Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--deployments` | 1 | Number of deployments/NodePools to create or delete |
+| `--replicas` | 3 | Number of replicas per deployment |
+| `--namespace` | "default" | Kubernetes namespace to create/delete deployments in |
+| `--prefix` | "antiaffinity" | Prefix for deployment names |
+| `--delete` | false | Delete deployments instead of creating them |
+| `--halve` | false | Find all deployments with the given prefix and halve their replicas |
+| `--create-nodepools` | false | Create NodePools with diverse instance types and architectures |
+| `--delete-nodepools` | false | Delete NodePools with the given prefix |
+| `--nodepool-prefix` | "exclusive" | Prefix for NodePool names |
+| `--labels` | "" | Custom labels for NodePool in format 'key1=value1,key2=value2' |
+| `--kubeconfig` | "~/.kube/config" | Path to kubeconfig file |
+
+## Testing Karpenter with this Tool
+
+This tool is particularly useful for testing Karpenter's node provisioning capabilities:
+
+1. **Testing Anti-Affinity**: By creating deployments with pod anti-affinity, you can force Karpenter to provision multiple nodes.
+
+2. **Testing Topology Spread**: The topology spread constraints ensure pods are distributed across availability zones, testing Karpenter's ability to provision nodes in different zones.
+
+3. **Testing Instance Type Diversity**: By creating NodePools with different instance types, you can test Karpenter's ability to provision a diverse set of node types.
+
+4. **Testing Architecture Support**: The tool creates NodePools for both x86 (amd64) and ARM (arm64) architectures, testing Karpenter's multi-architecture support.
+
+5. **Testing Scaling**: The ability to halve replicas allows testing of Karpenter's node consolidation capabilities.
+
+## Example Workflow
+
+1. Create a diverse set of NodePools:
+   ```bash
+   go run create_deployments.go --create-nodepools --deployments=10 --replicas=5 --namespace=test
+   ```
+
+2. Observe Karpenter provisioning different types of nodes for each NodePool.
+
+3. Scale down deployments:
+   ```bash
+   go run create_deployments.go --halve --namespace=test
+   ```
+
+4. Observe Karpenter consolidating nodes.
+
+5. Clean up:
+   ```bash
+   go run create_deployments.go --delete --deployments=10 --namespace=test --prefix=antiaffinity
+   go run create_deployments.go --delete-nodepools --deployments=10 --nodepool-prefix=exclusive
+   ```
