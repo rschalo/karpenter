@@ -49,6 +49,11 @@ var errCandidateDeleting = fmt.Errorf("candidate is deleting")
 func SimulateScheduling(ctx context.Context, kubeClient client.Client, cluster *state.Cluster, provisioner *provisioning.Provisioner,
 	candidates ...*Candidate,
 ) (scheduling.Results, error) {
+	// TODO: remove the comments
+	fmt.Println("SimulateScheduling", len(candidates))
+	for _, candidate := range candidates {
+		fmt.Println("candidate", candidate.Name())
+	}
 	candidateNames := sets.NewString(lo.Map(candidates, func(t *Candidate, i int) string { return t.Name() })...)
 	nodes := cluster.Nodes()
 	deletingNodes := nodes.Deleting()

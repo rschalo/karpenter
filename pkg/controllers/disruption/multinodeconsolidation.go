@@ -114,14 +114,56 @@ func (m *MultiNodeConsolidation) firstNConsolidationOption(ctx context.Context, 
 	}
 	min := 1
 	if len(candidates) <= max {
-		max = len(candidates) - 1
+		max = 2
 	}
+	boundaryFound := false
 
 	lastSavedCommand := Command{}
 	lastSavedResults := scheduling.Results{}
 	// Set a timeout
 	timeout := m.clock.Now().Add(MultiNodeConsolidationTimeoutDuration)
 	// binary search to find the maximum number of NodeClaims we can terminate
+	// TODO: fix the out of bounds exception happening
+	for !boundaryFound {
+		if max > len(candidates) {
+			max = len(candidates)
+			boundaryFound = true
+		}
+		if m.clock.Now().After(timeout) {
+			ConsolidationTimeoutsTotal.Inc(map[string]string{consolidationTypeLabel: m.ConsolidationType()})
+			if lastSavedCommand.candidates == nil {
+				log.FromContext(ctx).V(1).Info(fmt.Sprintf("failed to find a multi-node consolidation after timeout, last considered batch had %d", (min+max)/2))
+			} else {
+				log.FromContext(ctx).V(1).WithValues(lastSavedCommand.LogValues()...).Info("stopping multi-node consolidation after timeout, returning last valid command")
+			}
+		}
+		fmt.Println("length of candidates", len(candidates))
+		candidatesToConsolidate := candidates[0:max]
+		cmd, results, err := m.computeConsolidation(ctx, candidatesToConsolidate...)
+		if err != nil {
+			return Command{}, scheduling.Results{}, err
+		}
+
+		replacementHasValidInstanceTypes := false
+		if cmd.Decision() == ReplaceDecision {
+			cmd.replacements[0].InstanceTypeOptions, err = filterOutSameType(cmd.replacements[0], candidatesToConsolidate)
+			replacementHasValidInstanceTypes = len(cmd.replacements[0].InstanceTypeOptions) > 0 && err == nil
+		}
+
+		// replacementHasValidInstanceTypes will be false if the replacement action has valid instance types remaining after filtering.
+		if replacementHasValidInstanceTypes || cmd.Decision() == DeleteDecision {
+			// We can consolidate NodeClaims [0,mid]
+			lastSavedCommand = cmd
+			lastSavedResults = results
+			min = max
+			max *= 2
+		} else {
+			boundaryFound = true
+		}
+	}
+
+	fmt.Println("min", min, "max", max)
+
 	for min <= max {
 		if m.clock.Now().After(timeout) {
 			ConsolidationTimeoutsTotal.Inc(map[string]string{consolidationTypeLabel: m.ConsolidationType()})
@@ -133,7 +175,9 @@ func (m *MultiNodeConsolidation) firstNConsolidationOption(ctx context.Context, 
 			return lastSavedCommand, lastSavedResults, nil
 		}
 		mid := (min + max) / 2
+		fmt.Println("mid", mid)
 		candidatesToConsolidate := candidates[0 : mid+1]
+		fmt.Println("candidatesToConsolidate", len(candidatesToConsolidate))
 
 		cmd, results, err := m.computeConsolidation(ctx, candidatesToConsolidate...)
 		if err != nil {

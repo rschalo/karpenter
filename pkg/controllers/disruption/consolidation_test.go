@@ -50,7 +50,7 @@ import (
 	"sigs.k8s.io/karpenter/pkg/test/v1alpha1"
 )
 
-var _ = Describe("Consolidation", func() {
+var _ = FDescribe("Consolidation", func() {
 	var nodePool *v1.NodePool
 	var nodeClaim, spotNodeClaim *v1.NodeClaim
 	var node, spotNode *corev1.Node
@@ -215,7 +215,8 @@ var _ = Describe("Consolidation", func() {
 			})
 		})
 	})
-	Context("Budgets", func() {
+	// TODO: remove focueses
+	FContext("Budgets", func() {
 		var numNodes = 10
 		var nodeClaims []*v1.NodeClaim
 		var nodes []*corev1.Node
@@ -317,7 +318,7 @@ var _ = Describe("Consolidation", func() {
 			Expect(len(ExpectNodeClaims(ctx, env.Client))).To(Equal(numNodes))
 			Expect(numNodes).To(Equal(numNodes))
 		})
-		It("should only allow 3 nodes to be deleted in multi node consolidation delete", func() {
+		FIt("should only allow 3 nodes to be deleted in multi node consolidation delete", func() {
 			nodePool.Spec.Disruption.Budgets = []v1.Budget{{Nodes: "30%"}}
 
 			ExpectApplied(ctx, env.Client, nodePool)
