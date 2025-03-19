@@ -122,8 +122,7 @@ func (m *MultiNodeConsolidation) firstNConsolidationOption(ctx context.Context, 
 	lastSavedResults := scheduling.Results{}
 	// Set a timeout
 	timeout := m.clock.Now().Add(MultiNodeConsolidationTimeoutDuration)
-	// binary search to find the maximum number of NodeClaims we can terminate
-	// TODO: fix the out of bounds exception happening
+	// exponential then binary search to find the maximum number of NodeClaims we can terminate
 	for !boundaryFound {
 		if max > len(candidates) {
 			max = len(candidates)
@@ -136,8 +135,9 @@ func (m *MultiNodeConsolidation) firstNConsolidationOption(ctx context.Context, 
 			} else {
 				log.FromContext(ctx).V(1).WithValues(lastSavedCommand.LogValues()...).Info("stopping multi-node consolidation after timeout, returning last valid command")
 			}
+			return lastSavedCommand, lastSavedResults, nil
 		}
-		fmt.Println("length of candidates", len(candidates))
+		// triple check this isn't supposed to be 0:max+1
 		candidatesToConsolidate := candidates[0:max]
 		cmd, results, err := m.computeConsolidation(ctx, candidatesToConsolidate...)
 		if err != nil {
@@ -152,7 +152,6 @@ func (m *MultiNodeConsolidation) firstNConsolidationOption(ctx context.Context, 
 
 		// replacementHasValidInstanceTypes will be false if the replacement action has valid instance types remaining after filtering.
 		if replacementHasValidInstanceTypes || cmd.Decision() == DeleteDecision {
-			// We can consolidate NodeClaims [0,mid]
 			lastSavedCommand = cmd
 			lastSavedResults = results
 			min = max
@@ -161,9 +160,9 @@ func (m *MultiNodeConsolidation) firstNConsolidationOption(ctx context.Context, 
 			boundaryFound = true
 		}
 	}
-
-	fmt.Println("min", min, "max", max)
-
+	if max > len(candidates) {
+		max = len(candidates)
+	}
 	for min <= max {
 		if m.clock.Now().After(timeout) {
 			ConsolidationTimeoutsTotal.Inc(map[string]string{consolidationTypeLabel: m.ConsolidationType()})
@@ -175,9 +174,7 @@ func (m *MultiNodeConsolidation) firstNConsolidationOption(ctx context.Context, 
 			return lastSavedCommand, lastSavedResults, nil
 		}
 		mid := (min + max) / 2
-		fmt.Println("mid", mid)
-		candidatesToConsolidate := candidates[0 : mid+1]
-		fmt.Println("candidatesToConsolidate", len(candidatesToConsolidate))
+		candidatesToConsolidate := candidates[0:mid]
 
 		cmd, results, err := m.computeConsolidation(ctx, candidatesToConsolidate...)
 		if err != nil {

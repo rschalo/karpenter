@@ -50,7 +50,7 @@ import (
 	"sigs.k8s.io/karpenter/pkg/test/v1alpha1"
 )
 
-var _ = FDescribe("Consolidation", func() {
+var _ = Describe("Consolidation", func() {
 	var nodePool *v1.NodePool
 	var nodeClaim, spotNodeClaim *v1.NodeClaim
 	var node, spotNode *corev1.Node
@@ -215,8 +215,7 @@ var _ = FDescribe("Consolidation", func() {
 			})
 		})
 	})
-	// TODO: remove focueses
-	FContext("Budgets", func() {
+	Context("Budgets", func() {
 		var numNodes = 10
 		var nodeClaims []*v1.NodeClaim
 		var nodes []*corev1.Node
@@ -318,7 +317,7 @@ var _ = FDescribe("Consolidation", func() {
 			Expect(len(ExpectNodeClaims(ctx, env.Client))).To(Equal(numNodes))
 			Expect(numNodes).To(Equal(numNodes))
 		})
-		FIt("should only allow 3 nodes to be deleted in multi node consolidation delete", func() {
+		It("should only allow 3 nodes to be deleted in multi node consolidation delete", func() {
 			nodePool.Spec.Disruption.Budgets = []v1.Budget{{Nodes: "30%"}}
 
 			ExpectApplied(ctx, env.Client, nodePool)
@@ -359,7 +358,7 @@ var _ = FDescribe("Consolidation", func() {
 			ExpectSingletonReconciled(ctx, disruptionController)
 			wg.Wait()
 
-			// Execute command, thus deleting 3 nodes
+			// Execute command, thus deleting 100 nodes
 			ExpectSingletonReconciled(ctx, queue)
 			Expect(len(ExpectNodeClaims(ctx, env.Client))).To(Equal(7))
 		})
