@@ -20,8 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	"github.com/samber/lo"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	v1 "sigs.k8s.io/karpenter/pkg/apis/v1"
@@ -32,11 +30,13 @@ import (
 // Emptiness is a subreconciler that deletes empty candidates.
 type Emptiness struct {
 	consolidation
+	Validator Validator
 }
 
-func NewEmptiness(c consolidation) *Emptiness {
+func NewEmptiness(c consolidation, validator Validator) *Emptiness {
 	return &Emptiness{
 		consolidation: c,
+		Validator:     NewEmptinessValidator(c.clock, c.cluster, c.kubeClient, c.provisioner, c.cloudProvider, c.recorder, c.queue),
 	}
 }
 
@@ -91,7 +91,7 @@ func (e *Emptiness) ComputeCommand(ctx context.Context, disruptionBudgetMapping 
 		candidates: empty,
 	}
 
-	// Empty Node Consolidation doesn't use Validation as we get to take advantage of cluster.IsNodeNominated.  This
+	// Empty Node Consolidation doesn't use validation as we get to take advantage of cluster.IsNodeNominated.  This
 	// lets us avoid a scheduling simulation (which is performed periodically while pending pods exist and drives
 	// cluster.IsNodeNominated already).
 	select {
@@ -100,8 +100,7 @@ func (e *Emptiness) ComputeCommand(ctx context.Context, disruptionBudgetMapping 
 	case <-e.clock.After(consolidationTTL):
 	}
 
-	v := NewValidation(e.clock, e.cluster, e.kubeClient, e.provisioner, e.cloudProvider, e.recorder, e.queue, e.Reason())
-	validatedCandidates, err := v.ValidateCandidates(ctx, cmd.candidates...)
+	validatedCommand, err := e.Validator.Validate(ctx, cmd, 0)
 	if err != nil {
 		if IsValidationError(err) {
 			log.FromContext(ctx).V(1).WithValues(cmd.LogValues()...).Info("abandoning empty node consolidation attempt due to pod churn, command is no longer valid")
@@ -110,15 +109,7 @@ func (e *Emptiness) ComputeCommand(ctx context.Context, disruptionBudgetMapping 
 		return Command{}, scheduling.Results{}, err
 	}
 
-	// TODO (jmdeal@): better encapsulate within validation
-	if lo.ContainsBy(validatedCandidates, func(c *Candidate) bool {
-		return len(c.reschedulablePods) != 0
-	}) {
-		log.FromContext(ctx).V(1).WithValues(cmd.LogValues()...).Info("abandoning empty node consolidation attempt due to pod churn, command is no longer valid")
-		return Command{}, scheduling.Results{}, nil
-	}
-
-	return cmd, scheduling.Results{}, nil
+	return validatedCommand, scheduling.Results{}, nil
 }
 
 func (e *Emptiness) Reason() v1.DisruptionReason {

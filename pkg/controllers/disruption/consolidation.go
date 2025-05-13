@@ -61,6 +61,7 @@ type consolidation struct {
 	cloudProvider          cloudprovider.CloudProvider
 	recorder               events.Recorder
 	lastConsolidationState time.Time
+	Validator              Validator
 }
 
 func MakeConsolidation(clock clock.Clock, cluster *state.Cluster, kubeClient client.Client, provisioner *provisioning.Provisioner,
@@ -73,6 +74,7 @@ func MakeConsolidation(clock clock.Clock, cluster *state.Cluster, kubeClient cli
 		provisioner:   provisioner,
 		cloudProvider: cloudProvider,
 		recorder:      recorder,
+		validator:     NewConsolidationValidator(clock, cluster, kubeClient, provisioner, cloudProvider, recorder, queue),
 	}
 }
 

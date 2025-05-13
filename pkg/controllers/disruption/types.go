@@ -49,6 +49,7 @@ const (
 type Method interface {
 	ShouldDisrupt(context.Context, *Candidate) bool
 	ComputeCommand(context.Context, map[string]int, ...*Candidate) (Command, scheduling.Results, error)
+	ValidateCommand(context.Context, Command) (Command, error)
 	Reason() v1.DisruptionReason
 	Class() string
 	ConsolidationType() string
@@ -118,6 +119,7 @@ func NewCandidate(ctx context.Context, kubeClient client.Client, recorder events
 }
 
 type Command struct {
+	reason       v1.DisruptionReason
 	candidates   []*Candidate
 	replacements []*scheduling.NodeClaim
 }
