@@ -18,6 +18,8 @@ limitations under the License.
 package disruption_test
 
 import (
+	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -38,6 +40,18 @@ import (
 	"sigs.k8s.io/karpenter/pkg/test"
 	. "sigs.k8s.io/karpenter/pkg/test/expectations"
 )
+
+type TestValidator struct {
+	FailValidation       bool
+	PercentageSuccessful float64
+}
+
+func (t TestValidator) Validate(ctx context.Context, command disruption.Command, duration time.Duration) (disruption.Command, error) {
+	if t.FailValidation {
+		return disruption.Command{}, fmt.Errorf("validation failed")
+	}
+	return command, nil
+}
 
 var _ = Describe("Emptiness", func() {
 	var nodePool *v1.NodePool
