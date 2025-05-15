@@ -84,13 +84,13 @@ func NewController(clk clock.Clock, kubeClient client.Client, provisioner *provi
 		lastRun:       map[string]time.Time{},
 		methods: []Method{
 			// Terminate any NodeClaims that have drifted from provisioning specifications, allowing the pods to reschedule.
-			NewDrift(kubeClient, cluster, provisioner, recorder),
+			NewDrift(kubeClient, cluster, provisioner, recorder, NewValidation(clk, cluster, kubeClient, provisioner, cp, recorder, queue, v1.DisruptionReasonDrifted)),
 			// Delete any empty NodeClaims as there is zero cost in terms of disruption.
-			NewEmptiness(c),
+			NewEmptiness(c, NewValidation(clk, cluster, kubeClient, provisioner, cp, recorder, queue, v1.DisruptionReasonDrifted)),
 			// Attempt to identify multiple NodeClaims that we can consolidate simultaneously to reduce pod churn
-			NewMultiNodeConsolidation(c),
+			NewMultiNodeConsolidation(c, NewValidation(clk, cluster, kubeClient, provisioner, cp, recorder, queue, v1.DisruptionReasonUnderutilized)),
 			// And finally fall back our single NodeClaim consolidation to further reduce cluster cost.
-			NewSingleNodeConsolidation(c),
+			NewSingleNodeConsolidation(c, NewValidation(clk, cluster, kubeClient, provisioner, cp, recorder, queue, v1.DisruptionReasonUnderutilized)),
 		},
 	}
 }

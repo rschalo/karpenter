@@ -89,8 +89,9 @@ var _ = Describe("SingleNodeConsolidation", func() {
 			nodePool3.Name: {leastExpensiveInstance.Name: leastExpensiveInstance},
 		}
 
+		v := disruption.NewValidation(fakeClock, cluster, env.Client, prov, cloudProvider, recorder, queue, v1.DisruptionReasonUnderutilized)
 		// Create a single node consolidation controller
-		consolidation = disruption.NewSingleNodeConsolidation(disruption.MakeConsolidation(fakeClock, cluster, env.Client, prov, cloudProvider, recorder, queue))
+		consolidation = disruption.NewSingleNodeConsolidation(disruption.MakeConsolidation(fakeClock, cluster, env.Client, prov, cloudProvider, recorder, queue), v)
 	})
 
 	AfterEach(func() {

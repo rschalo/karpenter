@@ -39,12 +39,14 @@ const SingleNodeConsolidationType = "single"
 type SingleNodeConsolidation struct {
 	consolidation
 	PreviouslyUnseenNodePools sets.Set[string]
+	*Validation
 }
 
-func NewSingleNodeConsolidation(consolidation consolidation) *SingleNodeConsolidation {
+func NewSingleNodeConsolidation(consolidation consolidation, validation *Validation) *SingleNodeConsolidation {
 	return &SingleNodeConsolidation{
 		consolidation:             consolidation,
 		PreviouslyUnseenNodePools: sets.New[string](),
+		Validation:                validation,
 	}
 }
 
@@ -56,16 +58,16 @@ func (s *SingleNodeConsolidation) ComputeCommand(ctx context.Context, disruption
 	}
 	candidates = s.SortCandidates(ctx, candidates)
 
-	v := NewValidation(s.clock, s.cluster, s.kubeClient, s.provisioner, s.cloudProvider, s.recorder, s.queue, s.Reason())
+	// v := NewValidation(s.clock, s.cluster, s.kubeClient, s.provisioner, s.cloudProvider, s.recorder, s.queue, s.Reason())
 
 	// Set a timeout
-	timeout := s.clock.Now().Add(SingleNodeConsolidationTimeoutDuration)
+	timeout := s.consolidation.clock.Now().Add(SingleNodeConsolidationTimeoutDuration)
 	constrainedByBudgets := false
 
 	unseenNodePools := sets.New(lo.Map(candidates, func(c *Candidate, _ int) string { return c.NodePool.Name })...)
 
 	for i, candidate := range candidates {
-		if s.clock.Now().After(timeout) {
+		if s.consolidation.clock.Now().After(timeout) {
 			ConsolidationTimeoutsTotal.Inc(map[string]string{consolidationTypeLabel: s.ConsolidationType()})
 			log.FromContext(ctx).V(1).Info(fmt.Sprintf("abandoning single-node consolidation due to timeout after evaluating %d candidates", i))
 
@@ -99,7 +101,7 @@ func (s *SingleNodeConsolidation) ComputeCommand(ctx context.Context, disruption
 		if cmd.Decision() == NoOpDecision {
 			continue
 		}
-		if err := v.IsValid(ctx, cmd, consolidationTTL); err != nil {
+		if err := s.Validation.IsValid(ctx, cmd, consolidationTTL); err != nil {
 			if IsValidationError(err) {
 				log.FromContext(ctx).V(1).WithValues(cmd.LogValues()...).Info("abandoning single-node consolidation attempt due to pod churn, command is no longer valid")
 				return Command{}, scheduling.Results{}, nil
@@ -131,6 +133,11 @@ func (s *SingleNodeConsolidation) Class() string {
 
 func (s *SingleNodeConsolidation) ConsolidationType() string {
 	return SingleNodeConsolidationType
+}
+
+// ShouldDisrupt delegates to the embedded consolidation's ShouldDisrupt method
+func (s *SingleNodeConsolidation) ShouldDisrupt(ctx context.Context, cn *Candidate) bool {
+	return s.consolidation.ShouldDisrupt(ctx, cn)
 }
 
 // sortCandidates interweaves candidates from different nodepools and prioritizes nodepools
