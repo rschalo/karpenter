@@ -113,6 +113,18 @@ var _ = Describe("PodEvents", func() {
 		nodeClaim = ExpectExists(ctx, env.Client, nodeClaim)
 		Expect(nodeClaim.Status.LastPodEventTime.Time).To(BeZero())
 	})
+	It("should not set the nodeclaim lastPodEvent for terminating pods", func() {
+		ExpectApplied(ctx, env.Client, nodePool, nodeClaim, node, pod)
+		timeToCheck := fakeClock.Now().Truncate(time.Second)
+		ExpectObjectReconciled(ctx, env.Client, podEventsController, pod)
+		nodeClaim = ExpectExists(ctx, env.Client, nodeClaim)
+		Expect(nodeClaim.Status.LastPodEventTime.Time).To(BeEquivalentTo(timeToCheck))
+
+		fakeClock.Step(5 * time.Minute)
+		ExpectDeleted(ctx, env.Client, pod)
+		ExpectObjectReconciled(ctx, env.Client, podEventsController, pod)
+		Expect(nodeClaim.Status.LastPodEventTime.Time).To(BeEquivalentTo(timeToCheck))
+	})
 	It("should succeed when the nodeclaim lastPodEvent when the nodeclaim does not exist", func() {
 		ExpectApplied(ctx, env.Client, nodePool, node, pod)
 		ExpectObjectReconciled(ctx, env.Client, podEventsController, pod)

@@ -110,10 +110,8 @@ func (c *Controller) Register(ctx context.Context, m manager.Manager) error {
 				bound := oldPod.Spec.NodeName == "" && newPod.Spec.NodeName != ""
 				// if this is a newly terminal pod
 				terminal := (newPod.Spec.NodeName != "" && !podutils.IsTerminal(oldPod) && podutils.IsTerminal(newPod))
-				// if this is a newly terminating pod
-				terminating := (newPod.Spec.NodeName != "" && !podutils.IsTerminating(oldPod) && podutils.IsTerminating(newPod))
-				// return true if it was bound to a node, went terminal, or went terminating
-				return bound || terminal || terminating
+				// return true if it was bound to a node or went terminal
+				return bound || terminal
 			},
 		}).
 		Complete(reconcile.AsReconciler(m.GetClient(), c))
